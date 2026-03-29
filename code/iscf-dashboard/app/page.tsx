@@ -8,7 +8,7 @@ export default function Dashboard() {
   const [robotSpeed, setRobotSpeed] = useState<number>(1.0);
   const [data, setData] = useState<any[]>([]);
   const [intervalo, setIntervalo] = useState<number>(2);
-  const linkNgrok = "https://omeu-robot-fantastico.ngrok-free.app";
+  const linkNgrok = "https://bulah-unmossed-omnisciently.ngrok-free.dev ";
   const localhost = "http://localhost:8000/robot-speed";
 
   // --- FUNÇÃO: Cálculo de Previsão (Regressão Linear) ---
