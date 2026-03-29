@@ -7,20 +7,38 @@ export default function Dashboard() {
   const [data, setData] = useState<any[]>([]);
   const [intervalo, setIntervalo] = useState(2);
 
-  // --- CONFIGURAÇÕES ---
-  const LIMITE_ALERTA = 1.5; // Valor em m/s² para ativar o alarme visual
+  // --- FUNÇÃO: Cálculo de Previsão (Regressão Linear) ---
+  const getPrediction = (axis: string) => {
+    const points = data.slice(-5); // Analisa os últimos 5 pontos
+    if (points.length < 5) return null;
 
-  // --- FUNÇÃO: Atualizar intervalo no Backend (Lab 1.2/1.3) ---
+    const n = points.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    
+    points.forEach((p, i) => {
+      const val = p[`accel_${axis}`];
+      sumX += i;
+      sumY += val;
+      sumXY += i * val;
+      sumXX += i * i;
+    });
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    // Previsão para o próximo ponto (índice n)
+    return (slope * n + intercept).toFixed(4);
+  };
+
+  // --- FUNÇÃO: Atualizar intervalo no Backend ---
   const atualizarIntervalo = async (novoValor: number) => {
     setIntervalo(novoValor);
     try {
-      // Faz o PUT para o FastAPI para alterar a cadência de extração [cite: 61, 161]
       await fetch("http://localhost:8000/interval", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: novoValor }),
       });
-      console.log("Intervalo atualizado no Python:", novoValor);
     } catch (error) {
       console.error("Erro ao comunicar com o servidor Python:", error);
     }
@@ -36,7 +54,7 @@ export default function Dashboard() {
     if (robotData) setData(robotData.reverse());
   };
 
-  // --- REALTIME: Subscrever a mudanças no Supabase ---
+  // --- REALTIME: Subscrever a mudanças ---
   useEffect(() => {
     fetchInitialData();
     const channel = supabase
@@ -50,7 +68,7 @@ export default function Dashboard() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // --- ESTATÍSTICAS: Cálculos para o Relatório ---
+  // --- ESTATÍSTICAS ---
   const calcStats = (axis: string) => {
     if (data.length === 0) return { avg: 0, max: 0, min: 0 };
     const vals = data.map(d => d[`accel_${axis}`]).filter(v => v != null);
@@ -67,10 +85,6 @@ export default function Dashboard() {
   const statsZ = calcStats("z");
   const lastData = data.length > 0 ? data[data.length - 1] : null;
 
-  // Lógica de Alarme
-  const temAlerta = (valor: number | undefined) => Math.abs(valor || 0) > LIMITE_ALERTA;
-
-  // --- REPORT: Download CSV (Lab 1.3) ---
   const downloadReport = () => {
     if (data.length === 0) return alert("Sem dados para exportar.");
     const lines = ["timestamp,accel_x,accel_y,accel_z,temperature"];
@@ -91,59 +105,52 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-3 text-[#4a5268] text-xs">
           <div className="w-2 h-2 rounded-full bg-[#69ff47] shadow-[0_0_8px_#69ff47] animate-pulse"></div>
-          <span>Cloud Connected · Supabase</span>
+          <span>Cloud Connected · Forecasting Active</span>
         </div>
       </header>
 
-      {/* Métricas com Alarme Visual (Extra) */}
+      {/* Métricas com Previsão (Substitui o Alarme) */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[ 
-          { label: "Accel X", val: lastData?.accel_x, color: "text-[#00e5ff]", border: "border-l-[#00e5ff]" },
-          { label: "Accel Y", val: lastData?.accel_y, color: "text-[#ff4081]", border: "border-l-[#ff4081]" },
-          { label: "Accel Z", val: lastData?.accel_z, color: "text-[#69ff47]", border: "border-l-[#69ff47]" },
-          { label: "Temp (OpenWeather)", val: lastData?.temperature, color: "text-[#ffab40]", border: "border-l-[#ffab40]", unit: "°C" }
+          { label: "Accel X", key: "x", val: lastData?.accel_x, color: "text-[#00e5ff]", border: "border-l-[#00e5ff]" },
+          { label: "Accel Y", key: "y", val: lastData?.accel_y, color: "text-[#ff4081]", border: "border-l-[#ff4081]" },
+          { label: "Accel Z", key: "z", val: lastData?.accel_z, color: "text-[#69ff47]", border: "border-l-[#69ff47]" },
+          { label: "Temp (Lisboa)", key: "t", val: lastData?.temperature, color: "text-[#ffab40]", border: "border-l-[#ffab40]", unit: "°C" }
         ].map((m, i) => {
-          const alertaAtivo = m.label.includes("Accel") && temAlerta(m.val);
+          const pred = m.key !== "t" ? getPrediction(m.key) : null;
           return (
-            <div key={i} className={`bg-[#111318] border border-[#1e2230] p-4 rounded-md border-l-4 transition-all duration-300 
-              ${alertaAtivo ? 'border-l-red-500 bg-red-900/20 animate-pulse' : m.border}`}>
+            <div key={i} className={`bg-[#111318] border border-[#1e2230] p-4 rounded-md border-l-4 ${m.border}`}>
               <div className="flex justify-between items-center mb-2">
                 <div className="text-[10px] text-[#4a5268] uppercase tracking-widest">{m.label}</div>
-                {alertaAtivo && <span className="text-red-500 text-[8px] font-bold">⚠️ CRÍTICO</span>}
+                {pred && <span className="text-[#4a5268] text-[8px] font-bold">PREVISÃO T+1</span>}
               </div>
-              <div className={`text-3xl font-bold font-sans ${alertaAtivo ? 'text-red-500' : m.color}`}>
+              <div className={`text-3xl font-bold font-sans ${m.color}`}>
                 {m.val != null ? Number(m.val).toFixed(4) : "—"}
               </div>
-              <div className="text-[10px] text-[#4a5268] mt-1">{m.unit || "m/s²"}</div>
+              <div className="flex justify-between items-end mt-2">
+                <div className="text-[10px] text-[#4a5268]">{m.unit || "m/s²"}</div>
+                {pred && <div className="text-[10px] text-[#00e5ff] italic">Seguinte: {pred}</div>}
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Controlos (Lab 1.3) */}
       <div className="bg-[#111318] border border-[#1e2230] p-4 rounded-md mb-6 flex items-center gap-6">
         <div className="flex items-center gap-3">
-          <span className="text-[10px] text-[#4a5268] uppercase tracking-widest">Cadência (API)</span>
-          <input 
-            type="range" min="0.5" max="5" step="0.5" 
-            value={intervalo} 
-            onChange={(e) => atualizarIntervalo(Number(e.target.value))} 
-            className="accent-[#00e5ff] w-48" 
-          />
+          <span className="text-[10px] text-[#4a5268] uppercase tracking-widest">Cadência</span>
+          <input type="range" min="0.5" max="5" step="0.5" value={intervalo} onChange={(e) => atualizarIntervalo(Number(e.target.value))} className="accent-[#00e5ff] w-48" />
           <span className="text-[#00e5ff] font-mono">{intervalo.toFixed(1)}s</span>
         </div>
-        <button onClick={downloadReport} className="border border-[#00e5ff] text-[#00e5ff] px-4 py-2 rounded text-xs uppercase hover:bg-[#00e5ff] hover:text-black transition">
-          ⬇ Exportar CSV
-        </button>
+        <button onClick={downloadReport} className="border border-[#00e5ff] text-[#00e5ff] px-4 py-2 rounded text-xs uppercase hover:bg-[#00e5ff] hover:text-black transition">⬇ Exportar CSV</button>
       </div>
 
-      {/* Gráficos Individuais (Tipo Linear) */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         {[ 
           { id: "accel_x", label: "Acelerómetro X", color: "#00e5ff" },
           { id: "accel_y", label: "Acelerómetro Y", color: "#ff4081" },
           { id: "accel_z", label: "Acelerómetro Z", color: "#69ff47" },
-          { id: "temperature", label: "Temperatura (Lisboa)", color: "#ffab40" }
+          { id: "temperature", label: "Temperatura", color: "#ffab40" }
         ].map((g) => (
           <div key={g.id} className="bg-[#111318] border border-[#1e2230] p-4 rounded-md">
             <div className="text-[10px] text-[#4a5268] uppercase tracking-widest mb-4">{g.label}</div>
@@ -154,7 +161,7 @@ export default function Dashboard() {
                   <XAxis dataKey="created_at" hide />
                   <YAxis stroke="#4a5268" fontSize={10} domain={['auto', 'auto']} />
                   <Tooltip contentStyle={{ backgroundColor: "#0a0c10", borderColor: "#1e2230" }} />
-                  <Line type="linear" dataKey={g.id} stroke={g.color} dot={false} isAnimationActive={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey={g.id} stroke={g.color} dot={false} isAnimationActive={false} strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -162,7 +169,6 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Estatísticas e Tabela */}
       <div className="grid grid-cols-3 gap-4">
         <div className="col-span-1 bg-[#111318] border border-[#1e2230] p-4 rounded-md">
            <div className="text-[10px] text-[#4a5268] uppercase tracking-widest mb-4">Estatísticas (Realtime)</div>
@@ -185,17 +191,4 @@ export default function Dashboard() {
             <tbody>
               {[...data].reverse().slice(0, 10).map((row, i) => (
                 <tr key={i} className="border-b border-[#1e2230]/50 hover:bg-white/5">
-                  <td className="py-2 text-[#4a5268]">{new Date(row.created_at).toLocaleTimeString()}</td>
-                  <td className="text-[#00e5ff]">{Number(row.accel_x).toFixed(4)}</td>
-                  <td className="text-[#ff4081]">{Number(row.accel_y).toFixed(4)}</td>
-                  <td className="text-[#69ff47]">{Number(row.accel_z).toFixed(4)}</td>
-                  <td className="text-[#ffab40]">{Number(row.temperature).toFixed(1)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </main>
-  );
-}
+                  <td className="py-2 text-[#4a
