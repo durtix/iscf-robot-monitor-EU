@@ -8,6 +8,8 @@ export default function Dashboard() {
   const [robotSpeed, setRobotSpeed] = useState<number>(1.0);
   const [data, setData] = useState<any[]>([]);
   const [intervalo, setIntervalo] = useState<number>(2);
+  const linkNgrok = "https://omeu-robot-fantastico.ngrok-free.app";
+  const localhost = "http://localhost:8000/robot-speed";
 
   // --- FUNÇÃO: Cálculo de Previsão (Regressão Linear) ---
   const getPrediction = (axis: string) => {
@@ -30,7 +32,7 @@ export default function Dashboard() {
   const alterarVelocidadeRobo = async (valor: number) => {
   setRobotSpeed(valor);
   try {
-    await fetch("http://localhost:8000/robot-speed", {
+    await fetch(`${linkNgrok}/robot-speed`, {//${localhost}-------------------------------------------------------------------
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ value: valor }),
@@ -55,7 +57,7 @@ export default function Dashboard() {
   const atualizarIntervalo = async (novoValor: number) => {
     setIntervalo(novoValor);
     try {
-      await fetch("http://localhost:8000/interval", {
+      await fetch(`${linkNgrok}/interval`, { //${localhost} ---------------------------------------------------------------------------------
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: novoValor }),
