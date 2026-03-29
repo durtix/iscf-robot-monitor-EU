@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase"; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
+
 export default function Dashboard() {
+  const [robotSpeed, setRobotSpeed] = useState<number>(1.0);
   const [data, setData] = useState<any[]>([]);
   const [intervalo, setIntervalo] = useState<number>(2);
 
@@ -25,6 +27,18 @@ export default function Dashboard() {
     const intercept = (sumY - slope * sumX) / n;
     return (slope * n + intercept).toFixed(4);
   };
+  const alterarVelocidadeRobo = async (valor: number) => {
+  setRobotSpeed(valor);
+  try {
+    await fetch("http://localhost:8000/robot-speed", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: valor }),
+    });
+  } catch (e) {
+    console.log("Erro ao comunicar com o Backend Local");
+  }
+};
 
   // --- FUNÇÃO: Estatísticas ---
   const calcStats = (axis: string) => {
@@ -116,6 +130,27 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Segundo Slider: Controlo de Velocidade do Robô (EXTRA 20) */}
+      <div className="bg-[#111318] border border-[#ff4081]/30 p-4 rounded-md flex flex-col gap-3">
+        <div className="text-[10px] text-[#ff4081] uppercase font-bold tracking-widest">
+          Velocidade do Robô (Digital Twin)
+        </div>
+        <div className="flex items-center gap-4">
+          <input 
+            type="range" 
+            min="0.1" 
+            max="2" 
+            step="0.1" 
+            value={robotSpeed} 
+            onChange={(e) => alterarVelocidadeRobo(Number(e.target.value))} 
+            className="accent-[#ff4081] flex-1 cursor-pointer" 
+          />
+          <span className="text-[#ff4081] font-mono min-w-[45px] text-right">
+            {Math.round(robotSpeed * 100)}%
+          </span>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4 mb-6">
         {[ { id: "accel_x", label: "Acelerómetro X", color: "#00e5ff" }, { id: "accel_y", label: "Acelerómetro Y", color: "#ff4081" }, { id: "accel_z", label: "Acelerómetro Z", color: "#69ff47" }, { id: "temperature", label: "Temperatura", color: "#ffab40" } ].map((g) => (
           <div key={g.id} className="bg-[#111318] border border-[#1e2230] p-4 rounded-md">
@@ -127,7 +162,7 @@ export default function Dashboard() {
                   <XAxis dataKey="created_at" hide />
                   <YAxis stroke="#4a5268" fontSize={10} domain={['auto', 'auto']} />
                   <Tooltip contentStyle={{ backgroundColor: "#0a0c10", borderColor: "#1e2230" }} />
-                  <Line type="monotone" dataKey={g.id} stroke={g.color} dot={false} isAnimationActive={false} strokeWidth={2} />
+                  <Line type="linear" dataKey={g.id} stroke={g.color} dot={true} isAnimationActive={false} strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
