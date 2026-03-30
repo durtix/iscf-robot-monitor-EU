@@ -35,7 +35,7 @@ export default function Dashboard() {
   const alterarVelocidadeRobo = async (valor: number) => {
   setRobotSpeed(valor);
   try {
-    await fetch(`${linkNgrok}/robot-speed`, {//${localhost}-------------------------------------------------------------------
+    await fetch(`${API_BASE}/robot-speed`, {//${localhost}-------------------------------------------------------------------
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ value: valor }),
@@ -60,7 +60,7 @@ export default function Dashboard() {
   const atualizarIntervalo = async (novoValor: number) => {
     setIntervalo(novoValor);
     try {
-      await fetch(`${linkNgrok}/interval`, { //${localhost} ---------------------------------------------------------------------------------
+      await fetch(`${API_BASE}/interval`, { //${localhost} ---------------------------------------------------------------------------------
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: novoValor }),
