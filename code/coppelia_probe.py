@@ -1,93 +1,83 @@
 import sim
-import time 
+import time
 import requests
 
-# global configuration variables
-clientID=-1
+clientID = -1
 
-# Helper function provided by the teaching staff
-def get_data_from_simulation(id):
-    """Connects to the simulation and gets a float signal value
-
-    Parameters
-    ----------
-    id : str
-        The signal id in CoppeliaSim
-
-    Returns
-    -------
-    data : float
-        The float value retrieved from the simulation. None if retrieval fails.
-    """
-    if clientID!=-1:
-        res, data = sim.simxGetFloatSignal(clientID, id, sim.simx_opmode_blocking)
-        if res==sim.simx_return_ok:
+def get_data_from_simulation(signal_id):
+    if clientID != -1:
+        res, data = sim.simxGetFloatSignal(clientID, signal_id, sim.simx_opmode_blocking)
+        if res == sim.simx_return_ok:
             return data
     return None
 
+
 class DataCollection():
     def __init__(self):
-        pass        
+        self._main_online = True  # controla mensagem de aviso
 
     def run(self):
-        
+        print(">>> Sonda iniciada. A ler CoppeliaSim e a enviar para http://localhost:8000 ...")
+        print("=" * 60)
+
         while True:
-            data = {
-                "x": None,
-                "y": None,
-                "z": None,
-                "timestamp": time.time()
-            }
-            
-            x = get_data_from_simulation("accelX")            
-            if x is not None:
-                data["x"] = x
-            
+            # --- Leitura dos sensores ---
+            x = get_data_from_simulation("accelX")
             y = get_data_from_simulation("accelY")
-            if y is not None:
-                data["y"] = y
-
             z = get_data_from_simulation("accelZ")
-            if z is not None:
-                data["z"] = z
-            
-            print(data)
 
-            # TODO Lab 1: Add the necessary code to send data to your API
-            # Enviar dados para o servidor FastAPI (main.py)
-            payload = {
-                "accel_x": data["x"],
-                "accel_y": data["y"],
-                "accel_z": data["z"]
-            }
+            if x is None and y is None and z is None:
+                print("⚠️  [CoppeliaSim] Sem dados — certifica-te que a simulação está em modo Play.")
+            else:
+                print(f"[Sensor] X={x:.4f}  Y={y:.4f}  Z={z:.4f}")
 
+            payload = {"accel_x": x, "accel_y": y, "accel_z": z}
+            wait_time = 2.0  # fallback
+
+            # --- Envio para o backend local (main.py) ---
             try:
-                # Faz o envio para a tua API a correr localmente na porta 8000
-                response = requests.post("http://localhost:8000/data", json=payload)
-                
+                response = requests.post("http://localhost:8000/data", json=payload, timeout=3)
+
                 if response.status_code == 200:
-                    print("✅ Dados enviados para o Supabase com sucesso!")
-                else:
-                    print(f"⚠️ Erro no servidor: {response.status_code}")
-            except Exception as e:
-                print(f"❌ Erro de ligação: Certifica-te que o 'main.py' está a correr! ({e})")
-            
+                    resp_json  = response.json()
+                    wait_time  = float(resp_json.get("interval", 2.0))
 
-            # --- ALTERAÇÃO NECESSÁRIA PARA O INTERVALO DINÂMICO ---
-            try:
-                # Pergunta ao main.py qual o intervalo atual do slider
-                res = requests.get("http://localhost:8000/interval", timeout=1)
-                wait_time = res.json().get("interval", 1.0)
-                time.sleep(wait_time)
-            except:
-                # Fallback para 1 segundo se a API não responder
-                time.sleep(1)
+                    # Recuperou após estar offline — avisa uma vez
+                    if not self._main_online:
+                        print("✅ [Backend] main.py voltou a estar online!")
+                        self._main_online = True
+
+                    print(f"✅ Dados enviados ao Supabase. Próxima leitura em {wait_time}s")
+                else:
+                    print(f"⚠️  [Backend] Resposta inesperada: HTTP {response.status_code}")
+
+            except requests.exceptions.ConnectionError:
+                # main.py não está a correr
+                if self._main_online:
+                    print()
+                    print("=" * 60)
+                    print("❌  BACKEND NÃO ESTÁ LIGADO!")
+                    print("    Abre um terminal e executa:  uvicorn main:app --reload")
+                    print("    Os dados NÃO estão a ser gravados no Supabase.")
+                    print("=" * 60)
+                    self._main_online = False
+                else:
+                    print("❌  [Backend] main.py ainda offline... (a tentar de novo em 2s)")
+
+            except Exception as e:
+                print(f"❌  [Backend] Erro inesperado: {e}")
+
+            time.sleep(wait_time)
+
 
 if __name__ == '__main__':
-    sim.simxFinish(-1) # just in case, close all opened connections
-    clientID=sim.simxStart('127.0.0.1',19997,True,True,5000,5) # Connect to CoppeliaSim
-    if clientID!=-1:
-        data_collection = DataCollection()
-        data_collection.run()      
+    sim.simxFinish(-1)
+    clientID = sim.simxStart('127.0.0.1', 19997, True, True, 5000, 5)
+
+    if clientID != -1:
+        print('>>> Conectado ao CoppeliaSim (porta 19997).')
+        DataCollection().run()
     else:
+        print('>>> ERRO: Não foi possível ligar ao CoppeliaSim.')
+        print('    Verifica se o simulador está aberto e em modo Play.')
         exit()
