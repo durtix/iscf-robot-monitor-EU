@@ -78,6 +78,14 @@ export default function Dashboard() {
   const statsZ = calcStats("z");
   const lastData = data.length > 0 ? data[data.length - 1] : null;
 
+  // Definição dos gráficos para o loop
+  const chartsConfig = [
+    { id: "accel_x", label: "Acelerómetro X", color: "#00e5ff" },
+    { id: "accel_y", label: "Acelerómetro Y", color: "#ff4081" },
+    { id: "accel_z", label: "Acelerómetro Z", color: "#69ff47" },
+    { id: "temperature", label: "Temperatura", color: "#ffab40" }
+  ];
+
   return (
     <main className="p-6 font-mono bg-[#0a0c10] text-[#e0e6f0] min-h-screen text-sm">
       <header className="flex justify-between items-end border-b border-[#1e2230] pb-4 mb-6">
@@ -126,9 +134,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Gráficos de Telemetria */}
+      {/* Gráficos de Telemetria (Agora com 4 gráficos) */}
       <div className="grid grid-cols-2 gap-4 mb-6">
-        {[ { id: "accel_x", label: "Acelerómetro X", color: "#00e5ff" }, { id: "accel_y", label: "Acelerómetro Y", color: "#ff4081" } ].map((g) => (
+        {chartsConfig.map((g) => (
           <div key={g.id} className="bg-[#111318] border border-[#1e2230] p-4 rounded-md">
             <div className="text-[10px] text-[#4a5268] uppercase tracking-widest mb-4">{g.label}</div>
             <div className="h-[150px]">
