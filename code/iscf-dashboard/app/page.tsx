@@ -3,24 +3,25 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer
+  Tooltip, ResponsiveContainer,
 } from "recharts";
 
 // =====================================================================
-// Supabase config: robot_config row id=1 é a fonte de verdade.
-// Os sliders fazem UPDATE direto nessa tabela — sem Ngrok, sem backend.
-// O main.py (thread vigilante) lê esta tabela a cada 1s e age.
+// Os sliders fazem UPDATE direto em robot_config (id=1) no Supabase.
+// Colunas reais da tabela: robot_speed  e  intervalo_leitura
+// O main.py (thread vigilante) lê estas colunas a cada 1s e age.
+// Sem Ngrok. Sem chamadas ao backend local.
 // =====================================================================
 
 export default function Dashboard() {
   const [robotSpeed, setRobotSpeed] = useState<number>(1.0);
-  const [intervalo, setIntervalo] = useState<number>(2.0);
-  const [data, setData] = useState<any[]>([]);
+  const [intervalo, setIntervalo]   = useState<number>(2.0);
+  const [data, setData]             = useState<any[]>([]);
   const [configLoaded, setConfigLoaded] = useState(false);
 
-  // --- Previsão por Regressão Linear (T+1) ---
+  // --- Previsão T+1 (regressão linear) ---
   const getPrediction = (axis: string) => {
-    if (!data || data.length < 5) return null;
+    if (data.length < 5) return null;
     const points = data.slice(-5);
     const n = points.length;
     let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
@@ -30,14 +31,13 @@ export default function Dashboard() {
     });
     const denom = n * sumXX - sumX * sumX;
     if (denom === 0) return null;
-    const slope = (n * sumXY - sumX * sumY) / denom;
+    const slope     = (n * sumXY - sumX * sumY) / denom;
     const intercept = (sumY - slope * sumX) / n;
     return (slope * n + intercept).toFixed(4);
   };
 
   // --- Estatísticas ---
   const calcStats = (axis: string) => {
-    if (data.length === 0) return { avg: "0.0000", max: "0.0000", min: "0.0000" };
     const vals = data.map(d => (d as any)[`accel_${axis}`]).filter(v => v != null);
     if (vals.length === 0) return { avg: "0.0000", max: "0.0000", min: "0.0000" };
     return {
@@ -48,10 +48,10 @@ export default function Dashboard() {
   };
 
   // =====================================================================
-  // UPDATE SUPABASE: robot_config id=1
-  // Ambos os sliders escrevem aqui — o backend vigilante lê e age.
+  // UPDATE robot_config id=1 — usa os nomes reais das colunas!
+  // robot_speed e intervalo_leitura
   // =====================================================================
-  const updateConfig = async (patch: { robot_speed?: number; interval?: number }) => {
+  const updateConfig = async (patch: { robot_speed?: number; intervalo_leitura?: number }) => {
     const { error } = await supabase
       .from("robot_config")
       .update(patch)
@@ -68,27 +68,30 @@ export default function Dashboard() {
 
   const atualizarIntervalo = async (valor: number) => {
     setIntervalo(valor);
-    await updateConfig({ interval: valor });
+    await updateConfig({ intervalo_leitura: valor });   // <-- coluna correta
   };
 
   // --- Carregar config inicial do Supabase ---
   useEffect(() => {
     const loadConfig = async () => {
-      const { data: cfg } = await supabase
+      const { data: cfg, error } = await supabase
         .from("robot_config")
-        .select("robot_speed, interval")
+        .select("robot_speed, intervalo_leitura")       // <-- coluna correta
         .eq("id", 1)
         .single();
+      if (error) {
+        console.error("Erro ao carregar robot_config:", error.message);
+      }
       if (cfg) {
-        setRobotSpeed(cfg.robot_speed ?? 1.0);
-        setIntervalo(cfg.interval ?? 2.0);
+        setRobotSpeed(cfg.robot_speed          ?? 1.0);
+        setIntervalo(cfg.intervalo_leitura     ?? 2.0); // <-- coluna correta
       }
       setConfigLoaded(true);
     };
     loadConfig();
   }, []);
 
-  // --- Carregar telemetria e subscrever Realtime ---
+  // --- Telemetria: carga inicial + Realtime ---
   useEffect(() => {
     const fetchInitialData = async () => {
       const { data: robotData } = await supabase
@@ -105,18 +108,16 @@ export default function Dashboard() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "robot_data" },
-        (payload) => {
-          setData((prev) => [...prev.slice(-39), payload.new]);
-        }
+        (payload) => setData((prev) => [...prev.slice(-39), payload.new])
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const statsX = calcStats("x");
-  const statsY = calcStats("y");
-  const statsZ = calcStats("z");
+  const statsX   = calcStats("x");
+  const statsY   = calcStats("y");
+  const statsZ   = calcStats("z");
   const lastData = data.length > 0 ? data[data.length - 1] : null;
 
   return (
@@ -135,9 +136,9 @@ export default function Dashboard() {
       {/* Métrica Cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Accel X", key: "x", val: lastData?.accel_x, color: "text-[#00e5ff]", border: "border-l-[#00e5ff]" },
-          { label: "Accel Y", key: "y", val: lastData?.accel_y, color: "text-[#ff4081]", border: "border-l-[#ff4081]" },
-          { label: "Accel Z", key: "z", val: lastData?.accel_z, color: "text-[#69ff47]", border: "border-l-[#69ff47]" },
+          { label: "Accel X",       key: "x", val: lastData?.accel_x,    color: "text-[#00e5ff]", border: "border-l-[#00e5ff]" },
+          { label: "Accel Y",       key: "y", val: lastData?.accel_y,    color: "text-[#ff4081]", border: "border-l-[#ff4081]" },
+          { label: "Accel Z",       key: "z", val: lastData?.accel_z,    color: "text-[#69ff47]", border: "border-l-[#69ff47]" },
           { label: "Temp (Lisboa)", key: "t", val: lastData?.temperature, color: "text-[#ffab40]", border: "border-l-[#ffab40]", unit: "°C" },
         ].map((m, i) => {
           const pred = m.key !== "t" ? getPrediction(m.key) : null;
@@ -159,7 +160,7 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Slider: Cadência de Leitura */}
+      {/* Slider: Cadência */}
       <div className="bg-[#111318] border border-[#1e2230] p-4 rounded-md mb-4 flex items-center gap-6">
         <span className="text-[10px] text-[#4a5268] uppercase tracking-widest whitespace-nowrap">Cadência</span>
         <input
@@ -170,16 +171,20 @@ export default function Dashboard() {
           className="accent-[#00e5ff] w-48"
         />
         <span className="text-[#00e5ff] font-mono">{intervalo.toFixed(1)}s</span>
-        <span className="text-[9px] text-[#4a5268] italic ml-auto">→ Supabase robot_config · lido pela sonda</span>
+        <span className="text-[9px] text-[#4a5268] italic ml-auto">
+          → Supabase robot_config.intervalo_leitura · lido pela sonda
+        </span>
       </div>
 
-      {/* Slider: Velocidade do Robô (Digital Twin) */}
+      {/* Slider: Velocidade do Robô */}
       <div className="bg-[#111318] border border-[#ff4081]/30 p-4 rounded-md mb-6 flex flex-col gap-3">
         <div className="flex justify-between items-center">
           <div className="text-[10px] text-[#ff4081] uppercase font-bold tracking-widest">
             Velocidade do Robô (Digital Twin)
           </div>
-          <span className="text-[9px] text-[#4a5268] italic">→ Supabase robot_config · injetado no CoppeliaSim pelo backend</span>
+          <span className="text-[9px] text-[#4a5268] italic">
+            → Supabase robot_config.robot_speed · injetado no CoppeliaSim pelo backend
+          </span>
         </div>
         <div className="flex items-center gap-4">
           <input
@@ -198,10 +203,10 @@ export default function Dashboard() {
       {/* Gráficos */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         {[
-          { id: "accel_x", label: "Acelerómetro X", color: "#00e5ff" },
-          { id: "accel_y", label: "Acelerómetro Y", color: "#ff4081" },
-          { id: "accel_z", label: "Acelerómetro Z", color: "#69ff47" },
-          { id: "temperature", label: "Temperatura", color: "#ffab40" },
+          { id: "accel_x",    label: "Acelerómetro X", color: "#00e5ff" },
+          { id: "accel_y",    label: "Acelerómetro Y", color: "#ff4081" },
+          { id: "accel_z",    label: "Acelerómetro Z", color: "#69ff47" },
+          { id: "temperature",label: "Temperatura",    color: "#ffab40" },
         ].map((g) => (
           <div key={g.id} className="bg-[#111318] border border-[#1e2230] p-4 rounded-md">
             <div className="text-[10px] text-[#4a5268] uppercase tracking-widest mb-4">{g.label}</div>
@@ -212,7 +217,8 @@ export default function Dashboard() {
                   <XAxis dataKey="created_at" hide />
                   <YAxis stroke="#4a5268" fontSize={10} domain={["auto", "auto"]} />
                   <Tooltip contentStyle={{ backgroundColor: "#0a0c10", borderColor: "#1e2230" }} />
-                  <Line type="linear" dataKey={g.id} stroke={g.color} dot={true} isAnimationActive={false} strokeWidth={2} />
+                  <Line type="linear" dataKey={g.id} stroke={g.color} dot={true}
+                        isAnimationActive={false} strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -223,7 +229,9 @@ export default function Dashboard() {
       {/* Estatísticas + Tabela */}
       <div className="grid grid-cols-3 gap-4">
         <div className="col-span-1 bg-[#111318] border border-[#1e2230] p-4 rounded-md">
-          <div className="text-[10px] text-[#4a5268] uppercase tracking-widest mb-4">Estatísticas (40 Amostras)</div>
+          <div className="text-[10px] text-[#4a5268] uppercase tracking-widest mb-4">
+            Estatísticas (40 Amostras)
+          </div>
           <div className="space-y-3">
             {[
               { l: "X", s: statsX, c: "text-[#00e5ff]" },
@@ -232,16 +240,27 @@ export default function Dashboard() {
             ].map((ax) => (
               <div key={ax.l} className="bg-[#0a0c10] border border-[#1e2230] p-3 rounded">
                 <div className="text-[10px] text-[#4a5268] mb-1">EIXO {ax.l}</div>
-                <div className="flex justify-between text-[10px]"><span className="text-[#4a5268]">Média</span><span className={ax.c}>{ax.s.avg}</span></div>
-                <div className="flex justify-between text-[10px]"><span className="text-[#4a5268]">Máximo</span><span className={ax.c}>{ax.s.max}</span></div>
-                <div className="flex justify-between text-[10px]"><span className="text-[#4a5268]">Mínimo</span><span className={ax.c}>{ax.s.min}</span></div>
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-[#4a5268]">Média</span>
+                  <span className={ax.c}>{ax.s.avg}</span>
+                </div>
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-[#4a5268]">Máximo</span>
+                  <span className={ax.c}>{ax.s.max}</span>
+                </div>
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-[#4a5268]">Mínimo</span>
+                  <span className={ax.c}>{ax.s.min}</span>
+                </div>
               </div>
             ))}
           </div>
         </div>
 
         <div className="col-span-2 bg-[#111318] border border-[#1e2230] p-4 rounded-md overflow-y-auto max-h-[400px]">
-          <div className="text-[10px] text-[#4a5268] uppercase tracking-widest mb-4">Últimos Registos (Supabase)</div>
+          <div className="text-[10px] text-[#4a5268] uppercase tracking-widest mb-4">
+            Últimos Registos (Supabase)
+          </div>
           <table className="w-full text-left text-[10px]">
             <thead className="text-[#4a5268] border-b border-[#1e2230]">
               <tr>
@@ -252,7 +271,9 @@ export default function Dashboard() {
             <tbody>
               {[...data].reverse().map((row, i) => (
                 <tr key={i} className="border-b border-[#1e2230]/50 hover:bg-white/5">
-                  <td className="py-2 text-[#4a5268]">{new Date(row.created_at).toLocaleTimeString()}</td>
+                  <td className="py-2 text-[#4a5268]">
+                    {new Date(row.created_at).toLocaleTimeString()}
+                  </td>
                   <td className="text-[#00e5ff]">{Number(row.accel_x).toFixed(4)}</td>
                   <td className="text-[#ff4081]">{Number(row.accel_y).toFixed(4)}</td>
                   <td className="text-[#69ff47]">{Number(row.accel_z).toFixed(4)}</td>
