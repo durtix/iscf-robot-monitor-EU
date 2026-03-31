@@ -8,8 +8,8 @@ export default function Dashboard() {
   const [robotSpeed, setRobotSpeed] = useState<number>(1.0);
   const [data, setData] = useState<any[]>([]);
   const [intervalo, setIntervalo] = useState<number>(2);
-  const linkNgrok = "https://bulah-unmossed-omnisciently.ngrok-free.dev";
-  const linkLocal = "http://localhost:8000";
+  const linkNgrok = "https://bulah-unmossed-omnisciently.ngrok-free.dev"; //////////////////////////
+  const linkLocal = "https://localhost:8000";
   const API_BASE = typeof window !== "undefined" && window.location.hostname === "localhost"
   ? linkLocal 
   : linkNgrok;
