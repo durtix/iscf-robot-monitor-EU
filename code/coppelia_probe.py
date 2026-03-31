@@ -14,7 +14,8 @@ def get_data_from_simulation(signal_id):
 
 class DataCollection():
     def __init__(self):
-        self._main_online = True  # controla mensagem de aviso
+        self._main_online = True      # controla mensagem de aviso do backend
+        self._sim_online  = True      # controla mensagem de aviso da simulação
 
     def run(self):
         print(">>> Sonda iniciada. A ler CoppeliaSim e a enviar para http://localhost:8000 ...")
@@ -26,9 +27,26 @@ class DataCollection():
             y = get_data_from_simulation("accelY")
             z = get_data_from_simulation("accelZ")
 
-            if x is None and y is None and z is None:
-                print("⚠️  [CoppeliaSim] Sem dados — certifica-te que a simulação está em modo Play.")
+            sim_sem_dados = (x is None and y is None and z is None)
+
+            if sim_sem_dados:
+                # Avisa uma vez; depois só uma linha simples
+                if self._sim_online:
+                    print()
+                    print("=" * 60)
+                    print("⚠️   SIMULAÇÃO SEM DADOS!")
+                    print("    O CoppeliaSim está ligado mas não há sinais de acelerómetro.")
+                    print("    Verifica se a simulação está em modo Play (▶).")
+                    print("    A enviar null para o Supabase até a simulação arrancar...")
+                    print("=" * 60)
+                    self._sim_online = False
+                else:
+                    print("⚠️  [Simulação] Ainda sem dados — a enviar null...")
             else:
+                # Recuperou após estar sem dados — avisa uma vez
+                if not self._sim_online:
+                    print("✅ [Simulação] Dados recebidos! Simulação ativa.")
+                    self._sim_online = True
                 print(f"[Sensor] X={x:.4f}  Y={y:.4f}  Z={z:.4f}")
 
             payload = {"accel_x": x, "accel_y": y, "accel_z": z}
