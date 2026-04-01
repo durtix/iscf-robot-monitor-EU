@@ -203,26 +203,53 @@ async function generateReport(rows: Row[], minutes: number) {
   y += rowH;
 
   // linhas
-  const sample = [...rows].reverse().slice(0, 15);
+  const sample = [...rows].reverse(); 
+  
   sample.forEach((row, idx) => {
+    // 1. Verificação de Quebra de Página: Se o Y chegar ao fim da folha (275mm)
+    if (y > 275) {
+      doc.addPage();
+      doc.setFillColor(...dark);
+      doc.rect(0, 0, W, 297, "F");
+      y = 20; // Recomeça no topo da nova página
+      
+      // Desenha o cabeçalho da tabela novamente na nova página
+      doc.setFillColor(...mid);
+      doc.rect(MARGIN, y, COL, rowH, "F");
+      let headerX = MARGIN + 2;
+      cols.forEach((c, i) => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.5);
+        doc.setTextColor(...accent);
+        doc.text(c, headerX, y + 4.5);
+        headerX += colW[i];
+      });
+      y += rowH;
+    }
+
+    // 2. Zebra stripes (fundo alternado)
     if (idx % 2 === 0) {
       doc.setFillColor(17, 19, 28);
       doc.rect(MARGIN, y, COL, rowH, "F");
     }
+
     const cells = [
       new Date(row.created_at).toLocaleTimeString("pt-PT"),
       row.accel_x != null ? fmt(row.accel_x) : "—",
       row.accel_y != null ? fmt(row.accel_y) : "—",
       row.accel_z != null ? fmt(row.accel_z) : "—",
-      row.temperature != null ? Number(row.temperature).toFixed(1) : "—",
+      row.temperature != null ? Number(row.temperature).toFixed(1) + "°C" : "—",
     ];
+
     cx = MARGIN + 2;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...light);
+
+    // 3. Escrita das células com as novas larguras
     cells.forEach((cell, i) => {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(6.5);
-      doc.setTextColor(...light);
       doc.text(cell, cx, y + 4.5);
-      cx += colW[i];
+      cx += colW[i]; // Garante o alinhamento perfeito
     });
     y += rowH;
   });
