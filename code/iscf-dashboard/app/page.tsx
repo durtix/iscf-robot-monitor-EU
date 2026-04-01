@@ -36,7 +36,7 @@ function fmt(n: number) { return n.toFixed(4); }
 async function generateReport(rows: Row[], minutes: number) {
   // importação dinâmica para não quebrar SSR
   const { jsPDF } = await import("jspdf");
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const doc = new jsPDF({ unit: "mm", format: "a4" });////////////
 
   const W = 210;
   const MARGIN = 18;
