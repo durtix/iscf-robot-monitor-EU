@@ -1,11 +1,12 @@
 # Lab 1 — IoT Digital Twin Dashboard
 
-**Vercel URL:** `https://<o-teu-projeto>.vercel.app`
-> ⚠️ Substitui o URL acima pelo URL real do teu projeto no Vercel antes de entregar.
+**Vercel URL:** `https://iscf-robot-monitor-eu.vercel.app/`
 
----
 
 ## Descrição Geral
+Trabalho realizado por:
+Duarte Ferreira nº73800
+Gonçalo Figueiredo nº65678
 
 Este projeto implementa um sistema IoT completo de monitorização e controlo de um robô simulado, dividido em três camadas:
 
